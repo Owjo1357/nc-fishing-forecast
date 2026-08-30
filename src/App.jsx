@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Analytics } from "@vercel/analytics/react";
 import { LOCATIONS } from "./config/locations.js";
 import { buildDays } from "./lib/appLogic.js";
 import { loadForecast } from "./lib/dataFetch.js";
@@ -86,6 +87,7 @@ export default function App() {
 
   return (
     <div className="mx-auto px-4 sm:px-6" style={{ maxWidth: 720 }}>
+      <Analytics />
       <Header
         location={location}
         allLocations={LOCATIONS}
