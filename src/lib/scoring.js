@@ -495,6 +495,42 @@ function buildSummary({
 // early = hours 5,6,7,8 ; late = hours 8,9,10,11 (8 counted in both,
 // as the pivot). sunrise is a Date already in local wall-clock time.
 
+// Build the human-readable "why" for a when-to-go call. Picks whichever
+// factor actually moved across the morning and phrases only that one --
+// never "wind builds from 5 to 5 mph" when the wind held steady and it
+// was really the seas or the rain chance that changed.
+function describeMorningTrend(t) {
+  const { earlyWind, lateWind, earlyWave, lateWave, lateStorm, dWind, dWave, dStorm, sunrise, direction } = t;
+  const rEarlyW = earlyWind === null ? null : Math.round(earlyWind);
+  const rLateW = lateWind === null ? null : Math.round(lateWind);
+  const windMoved = rEarlyW !== null && rLateW !== null && rEarlyW !== rLateW;
+  const waveMoved = earlyWave !== null && lateWave !== null && Math.abs(dWave) >= 0.3;
+  const stormMoved = Math.abs(dStorm) >= 10;
+
+  if (direction === "build") {
+    const windUp = windMoved && dWind > 0;
+    if (windUp && Math.abs(dWind) >= Math.abs(dWave) * 4) {
+      return `wind goes from ${rEarlyW} to ${rLateW} mph by ${fmtTime(setHour(sunrise, 9))}`;
+    }
+    if (waveMoved && dWave > 0) {
+      return `seas build from ${earlyWave.toFixed(1)} to ${lateWave.toFixed(1)} ft through the morning`;
+    }
+    if (stormMoved && dStorm > 0) {
+      return `rain chance climbs to ${Math.round(lateStorm)}% by mid-morning`;
+    }
+    if (windUp) {
+      return `wind builds from ${rEarlyW} to ${rLateW} mph through the morning`;
+    }
+    return `conditions get a little sloppier as the morning goes on`;
+  }
+
+  // direction === "ease" -- only call it a change when it's a real one
+  if (windMoved && dWind <= -2) return `wind drops from ${rEarlyW} to ${rLateW} mph by 11`;
+  if (waveMoved && dWave <= -0.3) return `seas lay down from ${earlyWave.toFixed(1)} to ${lateWave.toFixed(1)} ft`;
+  if (rLateW !== null && rLateW > 10) return `wind holds fairly steady through the morning`;
+  return `wind stays light all morning`;
+}
+
 export function computeWhenToGo(window5to11, sunrise) {
   const byHour = {};
   for (const h of window5to11) byHour[h.hour] = h;
@@ -526,6 +562,7 @@ export function computeWhenToGo(window5to11, sunrise) {
   const lateRecovers = (lateStrictWind === null || lateStrictWind < 15) && lateStrictVis >= 1 && lateStrictStorm < 30;
 
   let category, arrival, end, reason;
+  const trend = { earlyWind, lateWind, earlyWave, lateWave, lateStorm, dWind, dWave, dStorm, sunrise };
 
   if (earlyBlown && lateRecovers) {
     category = "Wait it out";
@@ -535,31 +572,29 @@ export function computeWhenToGo(window5to11, sunrise) {
     const startHour = cleanHour ? cleanHour.hour : 9;
     arrival = setHour(sunrise, startHour);
     end = setHour(sunrise, 11);
+    const rEarlyW = earlyWind === null ? null : Math.round(earlyWind);
+    const rLateW = lateWind === null ? null : Math.round(lateWind);
     reason =
       earlyVis < 1
         ? `fog should lift by ${fmtTime(arrival)}`
-        : `wind drops from ${Math.round(earlyWind)} to ${Math.round(lateWind)} mph after ${fmtTime(arrival)}`;
+        : rEarlyW !== null && rLateW !== null && rEarlyW !== rLateW
+        ? `wind drops from ${rEarlyW} to ${rLateW} mph after ${fmtTime(arrival)}`
+        : `the early chop should settle out by ${fmtTime(arrival)}`;
   } else if (dWind >= 6 || dWave >= 1.0 || (lateStorm >= 40 && earlyStorm < 20)) {
     category = "Get out early";
     arrival = addMinutes(sunrise, -45);
     end = addMinutes(arrival, 195); // 3h15m
-    reason =
-      dWind >= dWave * 4
-        ? `wind goes from ${Math.round(earlyWind)} to ${Math.round(lateWind)} mph by ${fmtTime(setHour(sunrise, 9))}`
-        : `seas build from ${earlyWave?.toFixed(1)} to ${lateWave?.toFixed(1)} ft through the morning`;
+    reason = describeMorningTrend({ ...trend, direction: "build" });
   } else if (dWind >= 2.5 || dWave >= 0.4 || dStorm >= 15) {
     category = "Early is better, but no rush";
     arrival = addMinutes(sunrise, -15);
     end = addMinutes(arrival, 255); // 4h15m
-    reason = `wind builds from ${Math.round(earlyWind)} to ${Math.round(lateWind)} mph through the morning`;
+    reason = describeMorningTrend({ ...trend, direction: "build" });
   } else {
     category = "No hurry";
     arrival = addMinutes(sunrise, 30);
     end = setHour(sunrise, 11);
-    reason =
-      dWind <= -2 || dWave <= -0.3
-        ? `conditions ease through the morning — wind drops to ${Math.round(lateWind)} mph by 11`
-        : `wind stays light all morning`;
+    reason = describeMorningTrend({ ...trend, direction: "ease" });
   }
 
   return {

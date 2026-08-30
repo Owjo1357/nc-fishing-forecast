@@ -141,5 +141,30 @@ describe("computeWhenToGo produces a real clock window", () => {
     const win = [5, 6, 7, 8, 9, 10, 11].map((h) => hour(h, { windMph: byHour[h], gustMph: byHour[h] + 3, windDirDeg: 270, precipProbPct: 0, visibilityMi: 10 }));
     const w = computeWhenToGo(win, sunrise);
     expect(w.category).toBe("Get out early");
+    // early block (5-8) vs late block (8-11) means, rounded
+    expect(w.reason).toMatch(/wind (goes|builds) from 7 to 16 mph/);
+  });
+
+  it("never says 'wind builds from N to N mph' when the wind holds steady", () => {
+    const sunrise = new Date(2000, 0, 1, 6, 30, 0, 0);
+    // Flat 8 mph wind all morning, but the seas build 1.0 -> 2.6 ft.
+    const wave = { 5: 1.0, 6: 1.1, 7: 1.3, 8: 1.7, 9: 2.2, 10: 2.5, 11: 2.8 };
+    const win = [5, 6, 7, 8, 9, 10, 11].map((h) =>
+      hour(h, { windMph: 8, gustMph: 11, windDirDeg: 270, waveFt: wave[h], periodSec: 5, precipProbPct: 0, visibilityMi: 10 })
+    );
+    const w = computeWhenToGo(win, sunrise);
+    expect(w.reason).not.toMatch(/from (\d+) to \1 mph/);
+    expect(w.reason).toMatch(/seas build from 1\.\d to 2\.\d ft/);
+  });
+
+  it("describes flat-calm mornings without inventing a wind change", () => {
+    const sunrise = new Date(2000, 0, 1, 6, 30, 0, 0);
+    const win = [5, 6, 7, 8, 9, 10, 11].map((h) =>
+      hour(h, { windMph: 5, gustMph: 7, windDirDeg: 270, precipProbPct: 0, visibilityMi: 10 })
+    );
+    const w = computeWhenToGo(win, sunrise);
+    expect(w.category).toBe("No hurry");
+    expect(w.reason).not.toMatch(/from (\d+) to \1/);
+    expect(w.reason).toMatch(/wind stays light all morning/);
   });
 });

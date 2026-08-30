@@ -83,6 +83,8 @@ export default function App() {
   }, [state.raw, location]);
 
   const effectiveSelected = selected === null && built && !built.error ? built.defaultIndex : selected;
+  const todayIndex =
+    built && built.days ? built.days.findIndex((d) => d.dayIndexFromToday === 0) : -1;
 
   return (
     <div className="mx-auto px-4 sm:px-6" style={{ maxWidth: 720 }}>
@@ -123,7 +125,12 @@ export default function App() {
             <ErrorState message="No forecast or tide data is available for this location yet." onRetry={() => fetchData(true)} />
           ) : (
             <>
-              <DayTabs days={built.days} selected={effectiveSelected} onSelect={setSelected} />
+              <DayTabs
+                days={built.days}
+                selected={effectiveSelected}
+                onSelect={setSelected}
+                todayIndex={todayIndex}
+              />
               {built.days[effectiveSelected] && (
                 <>
                   <OutlookCard day={built.days[effectiveSelected]} />
