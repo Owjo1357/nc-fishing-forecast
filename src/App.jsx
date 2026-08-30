@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Analytics } from "@vercel/analytics/react";
 import { LOCATIONS } from "./config/locations.js";
 import { buildDays } from "./lib/appLogic.js";
 import { loadForecast } from "./lib/dataFetch.js";
@@ -151,6 +152,7 @@ export default function App() {
         weatherConnected={!!(state.raw && state.raw.weather)}
         marineConnected={!!(state.raw && state.raw.marine)}
       />
+      <Analytics />
     </div>
   );
 }
