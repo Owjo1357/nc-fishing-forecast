@@ -1,24 +1,55 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { fmtDateLabel } from "./format.js";
 
 export default function DayTabs({ days, selected, onSelect, todayIndex }) {
   const stripRef = useRef(null);
   const tabRefs = useRef([]);
+  const leadSpacerRef = useRef(null);
+  const tailSpacerRef = useRef(null);
 
-  // Keep the selected day centered in the scroller so the days on either
-  // side of it are always visible without dragging the scrollbar.
+  // Center the selected day in the scroller. The leading/trailing
+  // spacers give the strip enough slack that even the first or last
+  // day can sit dead center, not just jammed against the edge.
+  const centerSelected = useCallback(
+    (behavior) => {
+      const strip = stripRef.current;
+      const tab = tabRefs.current[selected];
+      if (!strip || !tab) return;
+
+      const pad = strip.clientWidth / 2;
+      if (leadSpacerRef.current) leadSpacerRef.current.style.flexBasis = `${pad}px`;
+      if (tailSpacerRef.current) tailSpacerRef.current.style.flexBasis = `${pad}px`;
+
+      // getBoundingClientRect forces the reflow, so the spacer widths
+      // above are already applied by the time we measure.
+      const stripRect = strip.getBoundingClientRect();
+      const tabRect = tab.getBoundingClientRect();
+      const tabCenterInContent =
+        tabRect.left - stripRect.left + strip.scrollLeft + tabRect.width / 2;
+      const left = tabCenterInContent - strip.clientWidth / 2;
+
+      const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      strip.scrollTo({ left, behavior: reduceMotion ? "auto" : behavior });
+    },
+    [selected]
+  );
+
+  // Jump (no animation) on first paint / when the day list changes;
+  // animate when the user picks a different day.
+  useLayoutEffect(() => {
+    centerSelected("auto");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days.length]);
+
   useEffect(() => {
-    const strip = stripRef.current;
-    const tab = tabRefs.current[selected];
-    if (!strip || !tab) return;
-    const target = tab.offsetLeft - (strip.clientWidth - tab.clientWidth) / 2;
-    const max = strip.scrollWidth - strip.clientWidth;
-    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    strip.scrollTo({
-      left: Math.max(0, Math.min(target, max)),
-      behavior: reduceMotion ? "auto" : "smooth",
-    });
-  }, [selected, days.length]);
+    centerSelected("smooth");
+  }, [centerSelected]);
+
+  useEffect(() => {
+    const onResize = () => centerSelected("auto");
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [centerSelected]);
 
   const showJumpToToday = todayIndex >= 0 && selected !== todayIndex;
 
@@ -40,6 +71,7 @@ export default function DayTabs({ days, selected, onSelect, todayIndex }) {
       </div>
 
       <div className="tab-strip" ref={stripRef} role="tablist" aria-label="Choose a day">
+        <div ref={leadSpacerRef} aria-hidden="true" style={{ flex: "0 0 0px" }} />
         {days.map((d, i) => {
           const isSel = i === selected;
           return (
@@ -75,6 +107,7 @@ export default function DayTabs({ days, selected, onSelect, todayIndex }) {
             </button>
           );
         })}
+        <div ref={tailSpacerRef} aria-hidden="true" style={{ flex: "0 0 0px" }} />
       </div>
     </div>
   );

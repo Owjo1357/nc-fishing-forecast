@@ -84,7 +84,7 @@ h3 {
 }
 
 .day-tab {
-  scroll-snap-align: start;
+  scroll-snap-align: center;
   flex: 0 0 auto;
   min-width: 84px;
 }
