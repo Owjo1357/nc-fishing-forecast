@@ -25,6 +25,12 @@ export default function Footer({ location, fetchedAt, weatherConnected, marineCo
       <p className="mt-2 font-semibold" style={{ color: "var(--ink-soft)" }}>
         Conditions change — always check before you launch.
       </p>
+      <p className="mt-2">
+        Feature ideas or spot corrections?{" "}
+        <a href="mailto:owencedmondson@gmail.com" style={{ color: "var(--accent)" }}>
+          owencedmondson@gmail.com
+        </a>
+      </p>
     </footer>
   );
 }
