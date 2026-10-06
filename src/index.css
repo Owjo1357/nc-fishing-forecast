@@ -164,3 +164,19 @@ button:focus-visible,
 .alert-details[open] > summary::after {
   content: " ▾";
 }
+
+.alert-compact > summary {
+  list-style: none;
+}
+.alert-compact > summary::-webkit-details-marker {
+  display: none;
+}
+.alert-compact > summary::after {
+  content: "▸";
+  font-size: 0.75rem;
+  color: var(--label);
+  transition: transform 120ms ease;
+}
+.alert-compact[open] > summary::after {
+  transform: rotate(90deg);
+}

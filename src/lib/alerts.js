@@ -110,6 +110,32 @@ export function alertTiming(alert, dateStr, nowMs) {
   return [from, until].filter(Boolean).join(" ") || "in effect";
 }
 
+// Joins words NWS split across a line wrap ("low- lying" -> "low-lying").
+function tidy(text) {
+  return text.replace(/([a-z])- ([a-z])/g, "$1-$2");
+}
+
+// One sentence or two saying what this alert is about. NWS often issues
+// several alerts as one combined notice, so the WHAT line reads "For the
+// Beach Hazards Statement, ... For the Coastal Flood Advisory, ..." --
+// pick out just this alert's part instead of repeating the whole thing
+// on every banner.
+export function alertSummary(alert) {
+  const sections = alertSections(alert.description);
+  const what = (sections.find((x) => x.label === "WHAT") || sections[0] || {}).text || "";
+  const parts = what.split(/For the ([A-Z][A-Za-z ]*?(?:Statement|Advisory|Warning|Watch)),\s*/);
+  // split with a capture group -> [before, event1, text1, event2, text2, ...]
+  if (parts.length >= 3) {
+    for (let i = 1; i < parts.length; i += 2) {
+      if (parts[i].toLowerCase() === alert.event.toLowerCase()) {
+        const own = parts[i + 1].trim();
+        return tidy(own.charAt(0).toUpperCase() + own.slice(1));
+      }
+    }
+  }
+  return tidy(what);
+}
+
 // NWS descriptions are "* WHAT...text * WHERE...text * WHEN..." blocks.
 // Pull out the sections so the banner can lead with WHAT and lay the
 // rest out readably. Falls back to the raw text when the format differs.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { alertKind, alertsUrl, normalizeAlerts, alertsForDay, alertTiming, alertSections } from "./alerts.js";
+import { alertKind, alertsUrl, normalizeAlerts, alertsForDay, alertTiming, alertSections, alertSummary } from "./alerts.js";
 
 // Shapes copied from real api.weather.gov alerts for AMZ250/NCZ108 on
 // 2026-10-06.
@@ -129,5 +129,31 @@ describe("alertSections", () => {
   it("falls back to the plain text when there are no sections", () => {
     expect(alertSections("Dense fog this morning.")).toEqual([{ label: null, text: "Dense fog this morning." }]);
     expect(alertSections("")).toEqual([]);
+  });
+});
+
+describe("alertSummary", () => {
+  // Real combined notice from NWS Wilmington, 2026-10-06: one product
+  // carrying both a Beach Hazards Statement and a Coastal Flood Advisory.
+  const combined =
+    "* WHAT...For the Beach Hazards Statement, Strong north to south longshore current. There is also a Moderate Risk of rip currents. For the Coastal Flood Advisory, up to one half foot of inundation above ground level expected in low- lying areas near shorelines and tidal waterways.\n\n* WHERE...Coastal Pender and Coastal New Hanover Counties.\n\n* WHEN...For the Beach Hazards Statement, through this evening.";
+
+  it("pulls out just this alert's part of a combined notice", () => {
+    expect(alertSummary({ event: "Beach Hazards Statement", description: combined })).toBe(
+      "Strong north to south longshore current. There is also a Moderate Risk of rip currents."
+    );
+    expect(alertSummary({ event: "Coastal Flood Advisory", description: combined })).toBe(
+      "Up to one half foot of inundation above ground level expected in low-lying areas near shorelines and tidal waterways."
+    );
+  });
+
+  it("uses the whole WHAT line for an ordinary single-alert notice", () => {
+    expect(alertSummary({ event: "Small Craft Advisory", description: sca.properties.description })).toBe(
+      "Northeast winds 15 to 20 kt with gusts up to 30 kt and seas 4 to 6 ft."
+    );
+  });
+
+  it("falls back to the full WHAT line when the event isn't named in it", () => {
+    expect(alertSummary({ event: "Rip Current Statement", description: combined })).toMatch(/^For the Beach Hazards Statement/);
   });
 });
