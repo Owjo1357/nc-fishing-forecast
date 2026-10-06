@@ -27,6 +27,16 @@ export const IconFish = (p) => (
     <path d="M8 9.5c-1 .8-1 3.2 0 5" />
   </Icon>
 );
+export const IconChevronDown = (p) => (
+  <Icon {...p}>
+    <path d="M6 9l6 6 6-6" />
+  </Icon>
+);
+export const IconCheck = (p) => (
+  <Icon {...p}>
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </Icon>
+);
 export const IconPin = (p) => (
   <Icon {...p}>
     <path d="M12 21s-6.5-5.9-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.1-6.5 11-6.5 11Z" />
