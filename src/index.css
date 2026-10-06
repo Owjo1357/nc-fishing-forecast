@@ -180,3 +180,34 @@ button:focus-visible,
 .alert-compact[open] > summary::after {
   transform: rotate(90deg);
 }
+
+/* "What's new" popup: a bottom sheet on phones, a centered card on
+   wider screens. */
+.whats-new-backdrop {
+  background: rgba(22, 32, 43, 0.45);
+  animation: whats-new-fade 160ms ease-out;
+}
+.whats-new-sheet {
+  background: var(--card);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 32px -12px rgba(23, 41, 61, 0.35);
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: whats-new-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (min-width: 640px) {
+  .whats-new-sheet {
+    border-radius: 20px;
+    box-shadow: 0 24px 60px -16px rgba(23, 41, 61, 0.45);
+  }
+}
+@keyframes whats-new-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes whats-new-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}

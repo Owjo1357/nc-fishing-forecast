@@ -13,6 +13,7 @@ import MorningBreakdown from "./components/MorningBreakdown.jsx";
 import SpeciesCard from "./components/SpeciesCard.jsx";
 import SpotsCard from "./components/SpotsCard.jsx";
 import Footer from "./components/Footer.jsx";
+import WhatsNew from "./components/WhatsNew.jsx";
 import { DataNotice, ErrorState, LoadingSkeleton } from "./components/states.jsx";
 
 const LAST_LOCATION_KEY = "nc-fishing-forecast:location";
@@ -164,6 +165,7 @@ export default function App() {
   return (
     <div className="mx-auto px-4 sm:px-6" style={{ maxWidth: 720 }}>
       <Analytics />
+      <WhatsNew />
       <Header
         location={location}
         allLocations={LOCATIONS}
