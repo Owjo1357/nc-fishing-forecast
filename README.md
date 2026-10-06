@@ -1,72 +1,76 @@
 # NC Fishing Forecast
 
-Live at **https://nc-fishing-forecast.vercel.app**
+Morning fishing forecasts for the North Carolina coast. Every morning gets a score, a time to go, what's biting, and where to fish.
 
-A live, single-page fishing-conditions dashboard for North Carolina spots. Right now that's
-**Masonboro Inlet** (Wrightsville Beach, trolling) and **Cape Lookout** (Core Banks, surf and boat).
-Each location has its own bookmarkable path, e.g. `/cape-lookout`; the bare root opens the last one
-you used. Each day gets a 0–100 morning **Fishing Score** (5–11 AM window), a star rating, a plain-English summary, a "when to go" call, target species, and recommended spots — all computed in the browser from live data fetched on page load.
+**[nc-fishing-forecast.vercel.app](https://nc-fishing-forecast.vercel.app)**
 
-Open it on your phone at 5 AM and you get *today's* actual conditions.
+Open it on your phone before sunrise and you get that morning's actual conditions, not a generic weather report.
 
-## How it works
+## What it shows
 
-- **No API keys, no backend, no database.** The page fetches everything client-side and caches it in `localStorage` for one hour.
-- **Data sources**
-  - [Open-Meteo Forecast API](https://open-meteo.com/) — requested with `cell_selection=sea` so a coastal location gets an over-water grid cell, not an inland one. Hourly wind, gusts, direction, temp, apparent temp, precip, precip probability, cloud cover, pressure, visibility, weather code; daily high/low, sunrise/sunset. 16-day forecast + 5 past days.
-  - [Open-Meteo Marine API](https://open-meteo.com/en/docs/marine-weather-api) — hourly wave height/period/direction, swell and wind wave from NOAA's **GFS-Wave** model (`ncep_gfswave016`, 16 days), plus sea-surface temp from the default model. GFS-Wave was picked because it tracked buoy 41110 far better than the default (0.20 ft vs 0.59 ft average error); see `dataFetch.js`. The score reweights automatically past the wave horizon.
-  - [NOAA CO-OPS Tides & Currents](https://api.tidesandcurrents.noaa.gov/api/prod/) — high/low predictions for each location's station (**8658163** Wrightsville Beach, **8656841** Cape Lookout Bight). Fetched directly (it sends `Access-Control-Allow-Origin: *`).
-  - [NWS alerts](https://www.weather.gov/documentation/services-web-api) — active watches, warnings and advisories for each location's `nwsZones` (coastal waters + beach zone), shown as a banner drawn with the coastal warning flags. Display only; they don't change the score. Re-checked every 10 minutes even while the forecast is cached (`src/lib/alerts.js`).
-  - Moon phase and (fallback) sunrise/sunset are computed locally — astronomy, not forecast.
-  - NDBC stations (**41110** Masonboro, **CLKN7** Cape Lookout) are referenced in config but live readings are not wired up (no CORS; would need a proxy).
-- **Scoring engine** (`src/lib/scoring.js`) is pure functions — inputs in, score + breakdown out. Weights, safety caps, and rating bands are fixed and deliberate; don't retune them without a decision. Unit tests: `npm test`.
-- **Time** — all day/window logic runs in `America/New_York` via `Intl`, independent of the visitor's device clock. Default day is **today** before local noon, **tomorrow** at/after noon.
-- **Refreshing** — a normal page load uses the 1-hour cache; a browser reload (Ctrl+R / pull down on a phone) always fetches fresh data.
+- **A 0–100 fishing score** for the 5–11 AM window, with a star rating and a plain-English summary of the morning.
+- **When to go.** Whether to get out early before the wind builds, wait out early fog or chop, or take your time.
+- **Weather Service advisories.** Small Craft Advisories, gale warnings, rip current statements and other alerts show above the score, drawn with the coastal warning flags marinas fly.
+- **Hour-by-hour conditions** for the morning: wind, gusts, waves, rain chance and temperature.
+- **Tides, sunrise and water temperature.**
+- **Target species** based on the season and the water temperature, with an inshore fallback when it's too rough outside.
+- **Recommended spots** that fit the day's wind and seas, from the beach or by boat.
+- **About two weeks ahead and five days back**, so you can plan a trip or see how recent mornings scored.
 
-## Project layout
+## Locations
 
-```
-src/
-  config/locations.js   Location schema — add locations here, nothing else changes
-  lib/scoring.js         Pure scoring engine (+ scoring.test.js)
-  lib/appLogic.js        Raw API JSON + config -> per-day render objects
-  lib/dataFetch.js       Fetch + 1-hour localStorage cache + graceful degradation
-  components/            React UI
-  App.jsx               Orchestration: load, cache, loading/error states, refresh
-```
+| Place | Fishing | Link |
+|---|---|---|
+| Masonboro Inlet, Wrightsville Beach | Nearshore trolling and the inlet reefs | [/masonboro-inlet](https://nc-fishing-forecast.vercel.app/masonboro-inlet) |
+| Cape Lookout, Core Banks | Surf fishing from the beach, plus boat runs to the shoals and reefs | [/cape-lookout](https://nc-fishing-forecast.vercel.app/cape-lookout) |
 
-## Develop
+Each place has its own link, so you can bookmark the one you fish or add it to your home screen.
+
+## Where the data comes from
+
+Everything is live and free to use. There's no account, no API key and no server: the page pulls the data straight from these sources.
+
+- **Wind, weather and sunrise:** [Open-Meteo](https://open-meteo.com/), using over-water grid points so coastal wind isn't softened by land.
+- **Waves:** NOAA's GFS-Wave model via [Open-Meteo Marine](https://open-meteo.com/en/docs/marine-weather-api). It was checked against NOAA buoy 41110 off Masonboro Inlet, where it averaged within 0.2 ft of the measured wave height.
+- **Water temperature:** Open-Meteo Marine. It matched the same buoy within half a degree.
+- **Tides:** [NOAA Tides & Currents](https://tidesandcurrents.noaa.gov/), from the Wrightsville Beach and Cape Lookout Bight stations.
+- **Advisories:** [National Weather Service](https://www.weather.gov/) alerts for each place's coastal-waters and beach zones, re-checked every 10 minutes.
+- **Reef locations:** the [NC Division of Marine Fisheries Artificial Reef Guide](https://www.deq.nc.gov/about/divisions/marine-fisheries/public-information-and-education/coastal-fishing-information/artificial-reefs). Beach spots and shoals without official coordinates are marked as approximate on the page.
+
+## How the score works
+
+Each morning is scored on what matters most from a small boat, weighted roughly like this:
+
+| Factor | Weight |
+|---|---|
+| Wind speed and gusts | 28% |
+| Wave height | 22% |
+| Rain and thunderstorms | 12% |
+| Wave period (rolling swell vs. short chop) | 8% |
+| Air and water temperature | 8% |
+| Wind direction | 7% |
+| Cloud cover, pressure trend, tide movement | 5% each |
+
+Safety limits override the math. Sustained wind of 25 mph or more, gusts of 30 mph or more, or seas of 5 ft or more cap the score at 25. A high thunderstorm chance caps it at 30, and dense fog caps it at 40. When some data isn't available yet, such as waves far out in the forecast, the score is built from what is available and the page says so.
+
+Weather Service advisories are shown alongside the score but don't change it.
+
+## Built with
+
+[React](https://react.dev/), [Vite](https://vite.dev/) and [Tailwind CSS](https://tailwindcss.com/), hosted on [Vercel](https://vercel.com/). The scoring is plain JavaScript with unit tests (`src/lib/scoring.js`).
+
+To run it locally:
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
-npm test         # scoring engine unit tests
-npm run build    # -> dist/
-npm run preview  # serve the production build locally
+npm run dev    # http://localhost:5173
+npm test
 ```
 
-## Deploy (Vercel)
+## Feedback
 
-The repo is wired for Vercel (`vercel.json`, framework preset `vite`). Pushing to the
-default branch triggers a production deploy; pull requests get preview URLs.
+Have a spot correction or a feature idea? Email **[owencedmondson@gmail.com](mailto:owencedmondson@gmail.com)**.
 
-```bash
-npm i -g vercel
-vercel        # first run links the project
-vercel --prod
-```
+## A note on safety
 
-## Adding another location
-
-Append an entry to `LOCATIONS` in `src/config/locations.js` with the same shape
-(id, name, region, lat/lon, `tideStationId`, `buoyId`, `spots[]`, `species[]`).
-Optional fields — `spots[].access` (`"boat"`/`"beach"`), `windAgainstTide`,
-`roughWaterAdvice`, `weights` — are documented at the top of that file. The `id`
-becomes the URL path. Check that the Open-Meteo Marine API snaps your lat/lon to
-a water grid cell, and verify coordinates and station IDs against primary
-sources — don't guess.
-
-## Safety
-
-The score reflects **fishing quality, not a go/no-go safety call.** Blown-out days
-are marked clearly, but conditions change — always check before you launch.
+The score rates **fishing conditions, not whether it's safe to go out.** Conditions on the water change fast, so always check the marine forecast and use your own judgment before you launch.
