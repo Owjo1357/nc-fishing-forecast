@@ -18,12 +18,14 @@
  */
 
 import { nowInNY, HISTORY_DAYS } from "./appLogic.js";
+import { alertsUrl, normalizeAlerts } from "./alerts.js";
 
 const FORECAST_URL = "https://api.open-meteo.com/v1/forecast";
 const MARINE_URL = "https://marine-api.open-meteo.com/v1/marine";
 const COOPS_URL = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter";
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const ALERTS_TTL_MS = 10 * 60 * 1000; // NWS advisories re-checked every 10 min
 const CACHE_PREFIX = "nc-fishing-forecast:data:";
 const FETCH_TIMEOUT_MS = 15000;
 
@@ -202,20 +204,41 @@ function isFresh(data) {
  * Load the forecast bundle for a location.
  * @returns {Promise<{ data: RawBundle, fromCache: boolean, stale: boolean }>}
  */
+// NWS alerts for the location's zones. Returns the normalized list, []
+// when the location has no zones configured, or null when the request
+// failed (so the UI never mistakes "couldn't check" for "no alerts").
+async function fetchAlerts(location) {
+  if (!location.nwsZones || !location.nwsZones.length) return [];
+  try {
+    return normalizeAlerts(await fetchJson(alertsUrl(location.nwsZones)));
+  } catch {
+    return null;
+  }
+}
+
 export async function loadForecast({ location, force = false } = {}) {
   const cached = readCache(location.id);
   if (!force && isFresh(cached)) {
-    return { data: cached, fromCache: true, stale: false };
+    // Forecasts can sit for an hour, but a new advisory shouldn't wait
+    // that long -- re-check just the alerts once they're 10 minutes old.
+    const alertsAge = Date.now() - new Date(cached.alertsFetchedAt || 0).getTime();
+    if (alertsAge < ALERTS_TTL_MS) return { data: cached, fromCache: true, stale: false };
+    const alerts = await fetchAlerts(location);
+    const data = alerts === null && cached.alerts ? cached : { ...cached, alerts, alertsFetchedAt: new Date().toISOString() };
+    writeCache(location.id, data);
+    return { data, fromCache: true, stale: false };
   }
 
   const { dateStr: todayStr } = nowInNY();
 
-  const [weatherR, wavesR, sstR, tidesR] = await Promise.allSettled([
+  const [weatherR, wavesR, sstR, tidesR, alertsR] = await Promise.allSettled([
     fetchJson(buildForecastUrl(location)),
     fetchJson(buildMarineUrl(location, WAVE_HOURLY, WAVE_MODEL)),
     fetchJson(buildMarineUrl(location, SST_HOURLY)),
     fetchJson(buildTidesUrl(location, todayStr)),
+    fetchAlerts(location),
   ]);
+  const alerts = alertsR.status === "fulfilled" ? alertsR.value : null;
 
   let weather = weatherR.status === "fulfilled" ? weatherR.value : null;
   let marine = mergeMarine(
@@ -239,6 +262,7 @@ export async function loadForecast({ location, force = false } = {}) {
   if (!weather) failed.push("wind, temperature and rain forecast (Open-Meteo)");
   if (!marine) failed.push("wave and water-temperature forecast (Open-Meteo Marine)");
   if (!tides) failed.push("tide predictions (NOAA CO-OPS)");
+  if (alerts === null) failed.push("Weather Service advisories (NWS) — check weather.gov before heading out");
 
   // Total failure: fall back to a stale cache if we have one, otherwise
   // surface a hard error for the UI to catch.
@@ -268,6 +292,8 @@ export async function loadForecast({ location, force = false } = {}) {
     weather,
     marine,
     tides,
+    alerts,
+    alertsFetchedAt: new Date().toISOString(),
     buoy: { status: "unknown", note: `NDBC station ${location.buoyId} live readings are not wired up in this version.` },
     dataNotice,
   };

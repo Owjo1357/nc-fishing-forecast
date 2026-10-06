@@ -151,3 +151,16 @@ button:focus-visible,
     background-position: 0 50%;
   }
 }
+
+.alert-details > summary {
+  list-style: none;
+}
+.alert-details > summary::-webkit-details-marker {
+  display: none;
+}
+.alert-details > summary::after {
+  content: " ▸";
+}
+.alert-details[open] > summary::after {
+  content: " ▾";
+}

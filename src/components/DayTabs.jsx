@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { fmtDateLabel } from "./format.js";
+import SignalFlag from "./SignalFlag.jsx";
 
 export default function DayTabs({ days, selected, onSelect, todayIndex }) {
   const stripRef = useRef(null);
@@ -99,10 +100,22 @@ export default function DayTabs({ days, selected, onSelect, todayIndex }) {
                 {fmtDateLabel(d.dateStr)}
               </div>
               <div
-                className="text-xs font-semibold mt-0.5"
+                className="text-xs font-semibold mt-0.5 flex items-center gap-1.5"
                 style={{ color: isSel ? "#fff" : d.score.color || "var(--label-dim)" }}
               >
                 {d.score.ratingWord || "—"}
+                {/* The day's most serious NWS alert, as its warning flag. */}
+                {d.alerts && d.alerts.length > 0 && (
+                  <span role="img" title={d.alerts.map((a) => a.event).join(", ")} aria-label={d.alerts.map((a) => a.event).join(", ")}>
+                    <SignalFlag
+                      event={d.alerts[0].event}
+                      kind={d.alerts[0].kind}
+                      size={11}
+                      pole={false}
+                      ink={isSel ? "#ffffff" : undefined}
+                    />
+                  </span>
+                )}
               </div>
             </button>
           );

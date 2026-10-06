@@ -18,12 +18,14 @@
  *     weather: <Open-Meteo forecast JSON> | null,   // visibility already normalized to MILES
  *     marine:  <Open-Meteo marine JSON>   | null,
  *     tides:   { predictions: [{t, v, type}] } | null,
+ *     alerts:  [normalized NWS alerts] | null,          // see alerts.js
  *     buoy:    { status, note } | null,
  *     dataNotice: string | null,
  *   }
  */
 
 import * as Scoring from "./scoring.js";
+import { alertsForDay } from "./alerts.js";
 
 const TZ = "America/New_York";
 // How many past days the day strip shows (and dataFetch requests).
@@ -245,6 +247,8 @@ export function buildDays(rawData, location) {
   const weather = rawData.weather || null;
   const marine = rawData.marine || null;
   const tides = rawData.tides ? rawData.tides.predictions : null;
+  const alerts = rawData.alerts || null;
+  const nowMs = Date.now();
 
   const { dateStr: todayStr, hour: nowHour, minute: nowMinute } = nowInNY();
   // Per-location weights are overrides on top of the defaults, so a
@@ -421,6 +425,7 @@ export function buildDays(rawData, location) {
       marineAvailable,
       tideEvents,
       nextTideEvent: nextTideEvent(tides, dateStr, todayStr, nowHour, nowMinute),
+      alerts: alertsForDay(alerts, dateStr, todayStr, nowMs),
     };
   });
 

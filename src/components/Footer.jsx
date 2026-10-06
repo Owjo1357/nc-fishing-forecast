@@ -1,9 +1,12 @@
-export default function Footer({ location, fetchedAt, weatherConnected, marineConnected, tidesConnected }) {
+export default function Footer({ location, fetchedAt, weatherConnected, marineConnected, tidesConnected, alertsConnected }) {
   const sources = [
     `Open-Meteo forecast${weatherConnected ? "" : " (not connected)"}`,
     `Open-Meteo marine${marineConnected ? "" : " (not connected)"}`,
     `NOAA CO-OPS tides, station ${location.tideStationId}${tidesConnected ? "" : " (not connected)"}`,
   ];
+  if (location.nwsZones && location.nwsZones.length) {
+    sources.push(`NWS alerts, zones ${location.nwsZones.join(", ")}${alertsConnected ? "" : " (not connected)"}`);
+  }
   return (
     <footer className="text-center text-xs pt-2 pb-8" style={{ color: "var(--label-dim)" }}>
       <p>Data: {sources.join(" · ")}</p>

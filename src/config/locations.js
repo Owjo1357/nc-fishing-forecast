@@ -14,6 +14,8 @@
  * surfaces that instead of pretending the number is exact.
  *
  * Optional per-location fields:
+ *   nwsZones           NWS zone ids (coastal waters + beach land zone)
+ *                      whose active advisories are shown as a banner.
  *   spots[].access     "boat" (default) or "beach". When a location has
  *                      both, the UI recommends the best of each.
  *   windAgainstTide    Override the inlet wind-against-tide ranges in
@@ -43,6 +45,13 @@ export const LOCATIONS = [
     // tide-prediction station to the inlet).
     tideStationId: "8658163",
     tideStationName: "Wrightsville Beach, NC",
+
+    // NWS zones for advisories. Checked with api.weather.gov/points and
+    // /zones (2026-10-06): the inlet point is in coastal-waters zone
+    // AMZ250 (Surf City to Cape Fear, out 20 nm); Wrightsville Beach is
+    // land zone NCZ108 (Coastal New Hanover), which carries the beach,
+    // rip-current and coastal-flood alerts.
+    nwsZones: ["AMZ250", "NCZ108"],
 
     // NDBC / CORMP nearshore wave buoy at the inlet itself. Confirmed
     // reporting current-day observations as of 2026-08-27 via the
@@ -280,6 +289,14 @@ export const LOCATIONS = [
     // Lookout, Lookout Bight", lat 34.6133 / lng -76.5383.
     tideStationId: "8656841",
     tideStationName: "Cape Lookout, Lookout Bight",
+
+    // NWS zones for advisories. The cape sits right on a zone boundary
+    // (api.weather.gov /zones, 2026-10-06): the Point and the water south
+    // and west of it are AMZ158 (Cape Lookout to Surf City); the Core
+    // Banks ocean side and AR-285 are AMZ156 (Ocracoke Inlet to Cape
+    // Lookout); the Bight and lighthouse are land zone NCZ196 (East
+    // Carteret).
+    nwsZones: ["AMZ158", "AMZ156", "NCZ196"],
 
     // NDBC C-MAN station CLKN7 on the cape (wind/met, no waves), 0.7 nm
     // from the tide station per the NDBC active-stations list

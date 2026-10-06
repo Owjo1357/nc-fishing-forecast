@@ -6,6 +6,7 @@ import { loadForecast } from "./lib/dataFetch.js";
 
 import Header from "./components/Header.jsx";
 import DayTabs from "./components/DayTabs.jsx";
+import AlertBanner from "./components/AlertBanner.jsx";
 import OutlookCard from "./components/OutlookCard.jsx";
 import MetricRow from "./components/MetricRow.jsx";
 import MorningBreakdown from "./components/MorningBreakdown.jsx";
@@ -208,6 +209,11 @@ export default function App() {
               />
               {built.days[effectiveSelected] && (
                 <>
+                  <AlertBanner
+                    alerts={built.days[effectiveSelected].alerts}
+                    dateStr={built.days[effectiveSelected].dateStr}
+                    location={location}
+                  />
                   <OutlookCard day={built.days[effectiveSelected]} />
                   <MetricRow day={built.days[effectiveSelected]} />
                   <MorningBreakdown day={built.days[effectiveSelected]} />
@@ -226,6 +232,7 @@ export default function App() {
         weatherConnected={!!(state.raw && state.raw.weather)}
         marineConnected={!!(state.raw && state.raw.marine)}
         tidesConnected={!!(state.raw && state.raw.tides)}
+        alertsConnected={!!(state.raw && Array.isArray(state.raw.alerts))}
       />
     </div>
   );
