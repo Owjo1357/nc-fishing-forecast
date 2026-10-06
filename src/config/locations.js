@@ -267,10 +267,10 @@ export const LOCATIONS = [
     id: "cape-lookout",
     name: "Cape Lookout",
     region: "Core Banks, NC",
-    // Just off the tip of the Point. Picked so the Open-Meteo Marine
-    // request snaps to the ocean grid cell south of the cape
-    // (34.5417, -76.5417) rather than the sheltered Bight cell to the
-    // north -- checked against the API on 2026-10-06.
+    // Just off the tip of the Point, on the ocean side, so the marine
+    // models pick open-ocean grid cells south of the cape rather than the
+    // sheltered Bight to the north -- checked against the API on
+    // 2026-10-06 (GFS-Wave snaps to 34.50, -76.50).
     lat: 34.58,
     lon: -76.538,
     verified: true,

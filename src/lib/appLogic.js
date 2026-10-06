@@ -26,6 +26,8 @@
 import * as Scoring from "./scoring.js";
 
 const TZ = "America/New_York";
+// How many past days the day strip shows (and dataFetch requests).
+export const HISTORY_DAYS = 5;
 const THUNDER_CODES = new Set([95, 96, 99]);
 
 export function nowInNY() {
@@ -253,12 +255,13 @@ export function buildDays(rawData, location) {
   // Normally the day list comes straight from Open-Meteo's daily
   // forecast. When weather data isn't available at all, fall back to
   // whatever date range the one live source we DO have (NOAA tides)
-  // covers, anchored 2 days back from today -- we never show more days
+  // covers, anchored HISTORY_DAYS back from today -- we never show more days
   // than we have at least some real data for.
   let dailyTimes = (weather && weather.daily && weather.daily.time) || [];
   if (dailyTimes.length === 0 && tides && tides.length) {
     const tideDates = Array.from(new Set(tides.map((p) => p.t.slice(0, 10)))).sort();
-    const start = daysBetween(tideDates[0], todayStr) < -2 ? addCalendarDays(todayStr, -2) : tideDates[0];
+    const start =
+      daysBetween(tideDates[0], todayStr) < -HISTORY_DAYS ? addCalendarDays(todayStr, -HISTORY_DAYS) : tideDates[0];
     dailyTimes = tideDates.filter((d) => d >= start);
   }
 

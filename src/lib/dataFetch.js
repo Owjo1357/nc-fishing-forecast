@@ -17,7 +17,7 @@
  * scoring engine already degrades gracefully on missing inputs.
  */
 
-import { nowInNY } from "./appLogic.js";
+import { nowInNY, HISTORY_DAYS } from "./appLogic.js";
 
 const FORECAST_URL = "https://api.open-meteo.com/v1/forecast";
 const MARINE_URL = "https://marine-api.open-meteo.com/v1/marine";
@@ -34,11 +34,18 @@ const FORECAST_HOURLY = [
   "visibility", "weather_code",
 ].join(",");
 
-const MARINE_HOURLY = [
+// Waves come from NOAA's GFS-Wave model. Checked against NDBC buoy 41110
+// (Masonboro Inlet) over Sep 30-Oct 5 2026 mornings: GFS-Wave averaged
+// 0.20 ft off the buoy, while Open-Meteo's default ("best_match") read
+// ~35% low (0.59 ft off). GFS-Wave also runs 16 days instead of ~10.
+// It has no sea-surface temperature, so SST comes from a second request
+// on the default model, which matched the buoy within half a degree.
+const WAVE_MODEL = "ncep_gfswave016";
+const WAVE_HOURLY = [
   "wave_height", "wave_period", "wave_direction",
-  "swell_wave_height", "swell_wave_period",
-  "wind_wave_height", "sea_surface_temperature",
+  "swell_wave_height", "swell_wave_period", "wind_wave_height",
 ].join(",");
+const SST_HOURLY = "sea_surface_temperature";
 
 function cacheKey(locationId) {
   return CACHE_PREFIX + locationId;
@@ -102,11 +109,16 @@ function buildForecastUrl(location) {
   const p = new URLSearchParams({
     latitude: String(location.lat),
     longitude: String(location.lon),
+    // Open-Meteo defaults to the nearest *land* grid cell. At Masonboro
+    // that's inland near Wilmington, which read ~10 mph on mornings the
+    // water saw ~20 (NWS marine forecast, Small Craft Advisory). We fish
+    // on the water, so ask for the sea cell.
+    cell_selection: "sea",
     hourly: FORECAST_HOURLY,
     daily: "temperature_2m_max,temperature_2m_min,sunrise,sunset",
     timezone: "America/New_York",
     forecast_days: "16",
-    past_days: "2",
+    past_days: String(HISTORY_DAYS),
     temperature_unit: "fahrenheit",
     wind_speed_unit: "mph",
     precipitation_unit: "inch",
@@ -114,18 +126,35 @@ function buildForecastUrl(location) {
   return `${FORECAST_URL}?${p.toString()}`;
 }
 
-function buildMarineUrl(location) {
+function buildMarineUrl(location, hourly, model) {
   const p = new URLSearchParams({
     latitude: String(location.lat),
     longitude: String(location.lon),
-    hourly: MARINE_HOURLY,
+    hourly,
     timezone: "America/New_York",
-    forecast_days: "10",
-    past_days: "2",
+    forecast_days: "16",
+    past_days: String(HISTORY_DAYS),
     length_unit: "imperial",
     temperature_unit: "fahrenheit",
   });
+  if (model) p.set("models", model);
   return `${MARINE_URL}?${p.toString()}`;
+}
+
+// Fold the SST series into the wave response by timestamp, so the rest
+// of the app still sees one Open-Meteo-shaped marine object. Either half
+// may be missing; whatever arrived is kept.
+export function mergeMarine(waves, sst) {
+  const ok = (r) => r && !r.error && r.hourly && Array.isArray(r.hourly.time);
+  if (!ok(waves) && !ok(sst)) return null;
+  if (!ok(waves)) return sst;
+  const merged = { ...waves, hourly: { ...waves.hourly } };
+  const sstByTime = {};
+  if (ok(sst) && Array.isArray(sst.hourly.sea_surface_temperature)) {
+    sst.hourly.time.forEach((t, i) => (sstByTime[t] = sst.hourly.sea_surface_temperature[i]));
+  }
+  merged.hourly.sea_surface_temperature = merged.hourly.time.map((t) => sstByTime[t] ?? null);
+  return merged;
 }
 
 function buildTidesUrl(location, todayStr) {
@@ -138,7 +167,7 @@ function buildTidesUrl(location, todayStr) {
     interval: "hilo",
     units: "english",
     format: "json",
-    begin_date: yyyymmdd(shiftDate(todayStr, -2)),
+    begin_date: yyyymmdd(shiftDate(todayStr, -HISTORY_DAYS)),
     end_date: yyyymmdd(shiftDate(todayStr, 16)),
   });
   return `${COOPS_URL}?${p.toString()}`;
@@ -181,14 +210,18 @@ export async function loadForecast({ location, force = false } = {}) {
 
   const { dateStr: todayStr } = nowInNY();
 
-  const [weatherR, marineR, tidesR] = await Promise.allSettled([
+  const [weatherR, wavesR, sstR, tidesR] = await Promise.allSettled([
     fetchJson(buildForecastUrl(location)),
-    fetchJson(buildMarineUrl(location)),
+    fetchJson(buildMarineUrl(location, WAVE_HOURLY, WAVE_MODEL)),
+    fetchJson(buildMarineUrl(location, SST_HOURLY)),
     fetchJson(buildTidesUrl(location, todayStr)),
   ]);
 
   let weather = weatherR.status === "fulfilled" ? weatherR.value : null;
-  let marine = marineR.status === "fulfilled" ? marineR.value : null;
+  let marine = mergeMarine(
+    wavesR.status === "fulfilled" ? wavesR.value : null,
+    sstR.status === "fulfilled" ? sstR.value : null
+  );
   let tides = null;
   if (tidesR.status === "fulfilled") {
     const v = tidesR.value;

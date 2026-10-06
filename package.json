@@ -1,7 +1,7 @@
 {
   "name": "nc-fishing-forecast",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "description": "Live morning fishing forecasts for North Carolina spots: Masonboro Inlet, Cape Lookout and more.",
   "scripts": {

@@ -13,8 +13,8 @@ Open it on your phone at 5 AM and you get *today's* actual conditions.
 
 - **No API keys, no backend, no database.** The page fetches everything client-side and caches it in `localStorage` for one hour.
 - **Data sources**
-  - [Open-Meteo Forecast API](https://open-meteo.com/) — hourly wind, gusts, direction, temp, apparent temp, precip, precip probability, cloud cover, pressure, visibility, weather code; daily high/low, sunrise/sunset. 16-day forecast + 2 past days.
-  - [Open-Meteo Marine API](https://open-meteo.com/en/docs/marine-weather-api) — hourly wave height/period/direction, swell, wind wave, sea-surface temp. ~10-day horizon; the score reweights automatically past that.
+  - [Open-Meteo Forecast API](https://open-meteo.com/) — requested with `cell_selection=sea` so a coastal location gets an over-water grid cell, not an inland one. Hourly wind, gusts, direction, temp, apparent temp, precip, precip probability, cloud cover, pressure, visibility, weather code; daily high/low, sunrise/sunset. 16-day forecast + 5 past days.
+  - [Open-Meteo Marine API](https://open-meteo.com/en/docs/marine-weather-api) — hourly wave height/period/direction, swell and wind wave from NOAA's **GFS-Wave** model (`ncep_gfswave016`, 16 days), plus sea-surface temp from the default model. GFS-Wave was picked because it tracked buoy 41110 far better than the default (0.20 ft vs 0.59 ft average error); see `dataFetch.js`. The score reweights automatically past the wave horizon.
   - [NOAA CO-OPS Tides & Currents](https://api.tidesandcurrents.noaa.gov/api/prod/) — high/low predictions for each location's station (**8658163** Wrightsville Beach, **8656841** Cape Lookout Bight). Fetched directly (it sends `Access-Control-Allow-Origin: *`).
   - Moon phase and (fallback) sunrise/sunset are computed locally — astronomy, not forecast.
   - NDBC stations (**41110** Masonboro, **CLKN7** Cape Lookout) are referenced in config but live readings are not wired up (no CORS; would need a proxy).
