@@ -83,11 +83,3 @@ export const IconDrop = (p) => (
     <path d="M12 3.5s6 6.8 6 11.2a6 6 0 0 1-12 0c0-4.4 6-11.2 6-11.2Z" />
   </Icon>
 );
-export const IconRefresh = (p) => (
-  <Icon {...p}>
-    <path d="M3 12a9 9 0 0 1 15.5-6.2L21 8" />
-    <path d="M21 3v5h-5" />
-    <path d="M21 12a9 9 0 0 1-15.5 6.2L3 16" />
-    <path d="M3 21v-5h5" />
-  </Icon>
-);

@@ -227,20 +227,16 @@ function splitTimeOfDay(iso) {
   return { hour: parseInt(iso.slice(11, 13), 10), minute: parseInt(iso.slice(14, 16), 10) };
 }
 
-function nextTideEvent(tidePredictions, dateStr, todayStr, nowHour) {
+// Prediction times are "YYYY-MM-DD HH:MM" local strings, so plain string
+// comparison orders them chronologically -- no Date parsing needed.
+export function nextTideEvent(tidePredictions, dateStr, todayStr, nowHour, nowMinute = 0) {
   if (!tidePredictions) return null;
-  const list = tidePredictions.map((p) => ({ ...p, dt: new Date(p.t.replace(" ", "T") + ":00") }));
-  const dayEvents = list.filter((p) => p.t.slice(0, 10) === dateStr).sort((a, b) => a.dt - b.dt);
-  if (dateStr !== todayStr) return dayEvents[0] || null;
-  const nowMinutes = nowHour * 60; // coarse but fine for "next" purposes
-  return (
-    dayEvents.find((e) => {
-      const { h, m } = parseHHMM(e.t.slice(11, 16));
-      return h * 60 + m >= nowMinutes;
-    }) ||
-    dayEvents[0] ||
-    null
-  );
+  const sorted = [...tidePredictions].sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0));
+  if (dateStr !== todayStr) return sorted.find((p) => p.t.slice(0, 10) === dateStr) || null;
+  // Today: the next event from now, which after the evening's last tide
+  // is tomorrow's first one -- not a tide that already happened.
+  const nowStr = `${todayStr} ${String(nowHour).padStart(2, "0")}:${String(nowMinute).padStart(2, "0")}`;
+  return sorted.find((p) => p.t >= nowStr) || null;
 }
 
 export function buildDays(rawData, location) {
@@ -248,7 +244,11 @@ export function buildDays(rawData, location) {
   const marine = rawData.marine || null;
   const tides = rawData.tides ? rawData.tides.predictions : null;
 
-  const { dateStr: todayStr, hour: nowHour } = nowInNY();
+  const { dateStr: todayStr, hour: nowHour, minute: nowMinute } = nowInNY();
+  // Per-location weights are overrides on top of the defaults, so a
+  // partial object like { windSpeed: 0.32 } doesn't drop every other
+  // factor out of the score.
+  const weights = location.weights ? { ...Scoring.DEFAULT_WEIGHTS, ...location.weights } : undefined;
 
   // Normally the day list comes straight from Open-Meteo's daily
   // forecast. When weather data isn't available at all, fall back to
@@ -348,7 +348,8 @@ export function buildDays(rawData, location) {
     const month = parseInt(dateStr.slice(5, 7), 10);
 
     const context = {
-      weights: location.weights || undefined,
+      weights,
+      windAgainstTide: location.windAgainstTide,
       marineAvailable,
       sstF,
       tideStage: tideStageAt5am(tides, dateStr),
@@ -364,12 +365,15 @@ export function buildDays(rawData, location) {
       ? Scoring.computeDayScore(window5to11, context)
       : Scoring.computeDayScore([], context);
 
-    const whenToGo = window5to11.length ? Scoring.computeWhenToGo(window5to11, sunrise) : null;
+    const whenToGo = window5to11.length
+      ? Scoring.computeWhenToGo(window5to11, sunrise, scoreResult.capReasons)
+      : null;
     const species = Scoring.recommendSpecies(location.species, {
       month,
       sstF,
       finalScore: scoreResult.score,
       avgWindMph: scoreResult.inputs ? scoreResult.inputs.avgWindMph : null,
+      roughWaterAdvice: location.roughWaterAdvice,
     });
     const spots = Scoring.recommendSpots(location.spots, {
       avgWaveFt: scoreResult.inputs ? scoreResult.inputs.avgWaveFt : null,
@@ -413,7 +417,7 @@ export function buildDays(rawData, location) {
       moon: moonPhase(dateStr),
       marineAvailable,
       tideEvents,
-      nextTideEvent: nextTideEvent(tides, dateStr, todayStr, nowHour),
+      nextTideEvent: nextTideEvent(tides, dateStr, todayStr, nowHour, nowMinute),
     };
   });
 

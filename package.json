@@ -1,9 +1,9 @@
 {
-  "name": "masonboro-fishing-dashboard",
+  "name": "nc-fishing-forecast",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Live fishing conditions dashboard for trolling out of Masonboro Inlet, Wrightsville Beach, NC.",
+  "description": "Live morning fishing forecasts for North Carolina spots: Masonboro Inlet, Cape Lookout and more.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

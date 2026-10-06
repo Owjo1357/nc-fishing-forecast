@@ -24,7 +24,7 @@ const MARINE_URL = "https://marine-api.open-meteo.com/v1/marine";
 const COOPS_URL = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter";
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-const CACHE_PREFIX = "masonboro-dashboard:data:";
+const CACHE_PREFIX = "nc-fishing-forecast:data:";
 const FETCH_TIMEOUT_MS = 15000;
 
 const FORECAST_HOURLY = [
@@ -131,7 +131,7 @@ function buildMarineUrl(location) {
 function buildTidesUrl(location, todayStr) {
   const p = new URLSearchParams({
     product: "predictions",
-    application: "masonboro-fishing-dashboard",
+    application: "nc-fishing-forecast",
     station: location.tideStationId,
     datum: "MLLW",
     time_zone: "lst_ldt",
@@ -235,7 +235,7 @@ export async function loadForecast({ location, force = false } = {}) {
     weather,
     marine,
     tides,
-    buoy: { status: "unknown", note: `NDBC/CORMP buoy ${location.buoyId} live readings are not wired up in this version.` },
+    buoy: { status: "unknown", note: `NDBC station ${location.buoyId} live readings are not wired up in this version.` },
     dataNotice,
   };
 

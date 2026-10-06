@@ -108,7 +108,14 @@ function scoreWindSpeed(avgWindMph, maxGustMph) {
   };
 }
 
-function scoreWindDirection(avgDirDeg, tideStage) {
+// Masonboro Inlet's flood/ebb axis: on a flood the current runs in
+// (roughly onshore/westerly into the inlet), on an ebb it runs out
+// (roughly offshore/easterly). Wind directions (degrees, inclusive) that
+// oppose each. A location can override this, or pass null to turn the
+// penalty off where there's no single inlet to model.
+export const DEFAULT_WIND_AGAINST_TIDE = { flood: [45, 135], ebb: [225, 315] };
+
+function scoreWindDirection(avgDirDeg, tideStage, againstTide = DEFAULT_WIND_AGAINST_TIDE) {
   if (avgDirDeg === null || avgDirDeg === undefined) return { score: null };
   // Base score by 8-point direction: offshore/side-offshore (W/NW/SW)
   // flattens and cleans the nearshore water and is rewarded; onshore
@@ -133,17 +140,14 @@ function scoreWindDirection(avgDirDeg, tideStage) {
     score = (base8[n1.d] * n2.diff + base8[n2.d] * n1.diff) / total;
   }
 
-  // Wind-against-tide penalty at the inlet: on a flood tide the
-  // current runs in (roughly onshore/westerly into the inlet); on an
-  // ebb it runs out (roughly offshore/easterly). Wind opposing the
-  // running current stacks up short, steep, dangerous chop right at
-  // the inlet mouth. This is a heuristic based on general inlet
-  // hydrodynamics, not a measured current -- kept as a modest penalty.
+  // Wind-against-tide penalty at the inlet: wind opposing the running
+  // current stacks up short, steep, dangerous chop right at the inlet
+  // mouth. This is a heuristic based on general inlet hydrodynamics,
+  // not a measured current -- kept as a modest penalty.
   let windAgainstTide = false;
-  if (tideStage === "flood" && avgDirDeg >= 45 && avgDirDeg <= 135) {
-    windAgainstTide = true; // easterly wind vs. incoming (westerly-ish) current
-  } else if (tideStage === "ebb" && avgDirDeg >= 225 && avgDirDeg <= 315) {
-    windAgainstTide = true; // westerly wind vs. outgoing (easterly-ish) current
+  const range = againstTide && (tideStage === "flood" || tideStage === "ebb") ? againstTide[tideStage] : null;
+  if (range && avgDirDeg >= range[0] && avgDirDeg <= range[1]) {
+    windAgainstTide = true;
   }
   if (windAgainstTide) score -= 12;
 
@@ -306,8 +310,9 @@ function applySafetyCaps(score, inputs) {
 // `context` carries everything that isn't per-hour: sstF, tideStage
 // ('flood'|'ebb'|null), tideEventsInWindow, tideEventsNearSunrise,
 // pressureTrendHpaPer12h, marineAvailable (bool), weights (object,
-// defaults to DEFAULT_WEIGHTS), speciesConfig (array), spotsConfig
-// (array), month (1-12), dayIndexFromToday (for confidence).
+// defaults to DEFAULT_WEIGHTS), windAgainstTide (ranges, null = off,
+// defaults to DEFAULT_WIND_AGAINST_TIDE), speciesConfig (array),
+// spotsConfig (array), month (1-12), dayIndexFromToday (for confidence).
 
 export function computeDayScore(window5to11, context) {
   const weights = context.weights || DEFAULT_WEIGHTS;
@@ -342,7 +347,11 @@ export function computeDayScore(window5to11, context) {
 
   const sub = {
     windSpeed: scoreWindSpeed(avgWindMph, maxGustSafe),
-    windDirection: scoreWindDirection(avgDirDeg, context.tideStage),
+    windDirection: scoreWindDirection(
+      avgDirDeg,
+      context.tideStage,
+      context.windAgainstTide === undefined ? DEFAULT_WIND_AGAINST_TIDE : context.windAgainstTide
+    ),
     waveHeight: scoreWaveHeight(avgWaveFt),
     wavePeriod: scoreWavePeriod(avgWaveFt, avgPeriodSec),
     rainStorm: scoreRainStorm(maxPrecipIn, maxPrecipProb, anyThunder),
@@ -463,7 +472,7 @@ function buildSummary({
   const tempPhrase = avgApparentTemp !== null ? `around ${Math.round(avgApparentTemp)}°F` : "";
 
   if (capReasons.includes("small-craft-wind") || capReasons.includes("seas")) {
-    return `Small craft conditions — ${windPhrase} with ${wavePhrase}. Not a trolling day.`;
+    return `Small craft conditions — ${windPhrase} with ${wavePhrase}. Not a day to run outside.`;
   }
   if (capReasons.includes("thunderstorms")) {
     return `Thunderstorm risk is high this morning — ${windPhrase}, ${Math.round(maxPrecipProb)}% storm chance. Not worth the run.`;
@@ -531,7 +540,9 @@ function describeMorningTrend(t) {
   return `wind stays light all morning`;
 }
 
-export function computeWhenToGo(window5to11, sunrise) {
+// capReasons: the day score's safety-cap reasons. When a cap fired and
+// the morning never cleans up, there is no window to recommend.
+export function computeWhenToGo(window5to11, sunrise, capReasons = []) {
   const byHour = {};
   for (const h of window5to11) byHour[h.hour] = h;
 
@@ -580,6 +591,20 @@ export function computeWhenToGo(window5to11, sunrise) {
         : rEarlyW !== null && rLateW !== null && rEarlyW !== rLateW
         ? `wind drops from ${rEarlyW} to ${rLateW} mph after ${fmtTime(arrival)}`
         : `the early chop should settle out by ${fmtTime(arrival)}`;
+  } else if (capReasons.some((r) => r === "small-craft-wind" || r === "seas" || r === "thunderstorms")) {
+    // Blown out and it doesn't recover -- don't dress that up as
+    // "no hurry, it only gets better".
+    return {
+      category: "Sit this one out",
+      windowStart: null,
+      windowEnd: null,
+      label: "no good window this morning",
+      reason: capReasons.includes("thunderstorms")
+        ? "storm risk stays high all morning"
+        : capReasons.includes("seas")
+        ? "seas stay too big all morning"
+        : "wind stays up all morning",
+    };
   } else if (dWind >= 6 || dWave >= 1.0 || (lateStorm >= 40 && earlyStorm < 20)) {
     category = "Get out early";
     arrival = addMinutes(sunrise, -45);
@@ -597,13 +622,15 @@ export function computeWhenToGo(window5to11, sunrise) {
     reason = describeMorningTrend({ ...trend, direction: "ease" });
   }
 
+  // Only promise "it only gets better" when something actually eases.
+  const improves = (earlyWind !== null && lateWind !== null && dWind <= -2) || dWave <= -0.3;
   return {
     category,
     windowStart: fmtTime(arrival),
     windowEnd: fmtTime(end),
     reason,
     label:
-      category === "No hurry"
+      category === "No hurry" && improves
         ? `${fmtTime(arrival)} – ${fmtTime(end)}, and it only gets better`
         : `${fmtTime(arrival)} – ${fmtTime(end)}`,
   };
@@ -619,7 +646,7 @@ function setHour(sunrise, hour) {
 // Species recommendation
 // ---------------------------------------------------------------
 
-export function recommendSpecies(speciesConfig, { month, sstF, finalScore, avgWindMph }) {
+export function recommendSpecies(speciesConfig, { month, sstF, finalScore, avgWindMph, roughWaterAdvice }) {
   const active = speciesConfig.filter((s) => s.activeMonths.includes(month));
   const conditionsAreRough = finalScore !== null && finalScore < 45;
 
@@ -631,9 +658,13 @@ export function recommendSpecies(speciesConfig, { month, sstF, finalScore, avgWi
       if (sstF !== null && s.sstMinF !== null) {
         if (sstF >= s.sstMinF && (!s.sstMaxF || sstF <= s.sstMaxF)) {
           fit = 90;
-          reason = `SST ${Math.round(sstF)}°F and ${
-            avgWindMph !== null ? Math.round(avgWindMph) + " mph wind" : "light wind"
-          } — prime ${s.name.toLowerCase()} conditions.`;
+          reason = conditionsAreRough
+            ? `Water's right at ${Math.round(sstF)}°F, but ${
+                avgWindMph !== null ? Math.round(avgWindMph) + " mph wind makes" : "conditions make"
+              } it a tough day to get to them.`
+            : `SST ${Math.round(sstF)}°F and ${
+                avgWindMph !== null ? Math.round(avgWindMph) + " mph wind" : "light wind"
+              } — prime ${s.name.toLowerCase()} conditions.`;
         } else if (sstF < s.sstMinF) {
           fit = clamp(50 - (s.sstMinF - sstF) * 5, 0, 50);
           reason = `Water's still ${Math.round(s.sstMinF - sstF)}°F short of ideal for ${s.name.toLowerCase()}.`;
@@ -655,7 +686,7 @@ export function recommendSpecies(speciesConfig, { month, sstF, finalScore, avgWi
     const fallback = speciesConfig.find((s) => s.inshoreFallback);
     const picks = scored.slice(0, 1).filter((s) => s.fit > 30);
     const result = fallback
-      ? [...picks, { ...fallback, reason: "Wind and seas are up outside — wind is up, fish inside." }]
+      ? [...picks, { ...fallback, reason: roughWaterAdvice || "Wind and seas are up outside — wind is up, fish inside." }]
       : picks;
     return result.slice(0, 3);
   }
@@ -667,8 +698,23 @@ export function recommendSpecies(speciesConfig, { month, sstF, finalScore, avgWi
 // Spot recommendation
 // ---------------------------------------------------------------
 
+const COMPASS_DEG = Object.fromEntries(COMPASS_16.map((d, i) => [d, i * 22.5]));
+
+// Does the wind count as "from" any of these compass names? A listed
+// direction covers its neighbours on the 16-point rose, so "NE" also
+// matches NNE and ENE -- otherwise a 30° wind ("NNE") would slip past
+// an avoidWindFrom: ["NE"] rule entirely.
+export function windFromAny(avgDirDeg, names) {
+  if (avgDirDeg === null || avgDirDeg === undefined || !names) return false;
+  return names.some((n) => {
+    const target = COMPASS_DEG[n];
+    if (target === undefined) return false;
+    const diff = Math.abs(((avgDirDeg - target + 540) % 360) - 180);
+    return diff <= 22.5;
+  });
+}
+
 export function recommendSpots(spotsConfig, { avgWaveFt, avgPeriodSec, avgDirDeg, tideEventsInWindow }) {
-  const dir = degToCompass(avgDirDeg);
   const scored = spotsConfig
     .map((spot) => {
       let score = 100 - spot.distanceNm * 1.5; // prefer closer, all else equal
@@ -685,10 +731,10 @@ export function recommendSpots(spotsConfig, { avgWaveFt, avgPeriodSec, avgDirDeg
       ) {
         excluded = true; // don't send someone on a long run in short-period chop
       }
-      if (dir && spot.suits.preferredWindFrom && spot.suits.preferredWindFrom.includes(dir)) {
+      if (windFromAny(avgDirDeg, spot.suits.preferredWindFrom)) {
         score += 20;
       }
-      if (dir && spot.suits.avoidWindFrom && spot.suits.avoidWindFrom.includes(dir)) {
+      if (windFromAny(avgDirDeg, spot.suits.avoidWindFrom)) {
         score -= 25;
       }
       if (spot.suits.tideMovingBonus && tideEventsInWindow && tideEventsInWindow.length > 0) {
@@ -700,9 +746,22 @@ export function recommendSpots(spotsConfig, { avgWaveFt, avgPeriodSec, avgDirDeg
     .filter((s) => !s.excluded)
     .sort((a, b) => b.matchScore - a.matchScore);
 
-  return scored.slice(0, 3).map((s) => ({
+  // Locations with both beach and boat spots get the best two of each,
+  // so a close beach spot never crowds every boat spot off the list
+  // (or the reverse). Boat-only locations keep a plain top three.
+  const accessOf = (s) => s.access || "boat";
+  const mixed = new Set(spotsConfig.map(accessOf)).size > 1;
+  const picks = mixed
+    ? [
+        ...scored.filter((s) => accessOf(s) === "beach").slice(0, 2),
+        ...scored.filter((s) => accessOf(s) === "boat").slice(0, 2),
+      ]
+    : scored.slice(0, 3);
+
+  return picks.map((s) => ({
     id: s.id,
     name: s.name,
+    access: accessOf(s),
     distanceNm: s.distanceNm,
     depthFt: s.depthFt,
     verified: s.verified,

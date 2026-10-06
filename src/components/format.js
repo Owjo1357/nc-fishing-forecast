@@ -43,7 +43,7 @@ export function fmtHourLabel(h) {
 }
 
 export function isInRecommendedWindow(hour, whenToGo) {
-  if (!whenToGo) return false;
+  if (!whenToGo || !whenToGo.windowStart || !whenToGo.windowEnd) return false;
   const parse = (s) => {
     const m = s.match(/(\d+):(\d+)\s*(AM|PM)/);
     if (!m) return null;

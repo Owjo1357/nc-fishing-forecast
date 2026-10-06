@@ -78,7 +78,7 @@ export default function OutlookCard({ day }) {
                   Bring radar/GPS caution — dense fog possible.
                 </div>
               )}
-              {!s.fogWarning && s.score !== null && s.score < 55 && (
+              {!s.fogWarning && s.inputs && s.inputs.maxPrecipProb >= 30 && (
                 <div className="mt-0.5" style={{ color: "var(--label)" }}>
                   Rain gear's not a bad call this morning.
                 </div>
@@ -90,7 +90,7 @@ export default function OutlookCard({ day }) {
             </div>
           )}
         </div>
-        <div className="sm:pl-4" style={{ borderLeft: "1px solid var(--divider)" }}>
+        <div className="sm:pl-4 sm:border-l" style={{ borderColor: "var(--divider)" }}>
           <div className="flex items-center gap-1.5 eyebrow mb-1.5">
             <IconSunrise size={13} /> SUNRISE
           </div>

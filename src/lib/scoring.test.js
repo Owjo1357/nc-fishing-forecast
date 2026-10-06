@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { computeDayScore, computeWhenToGo, RATING_BANDS } from "./scoring.js";
+import {
+  computeDayScore, computeWhenToGo, recommendSpots, recommendSpecies, windFromAny,
+  RATING_BANDS, DEFAULT_WIND_AGAINST_TIDE,
+} from "./scoring.js";
+import { LOCATIONS } from "../config/locations.js";
 
 // Minimal species config so the temperature sub-score has a range to
 // work against when SST is present.
@@ -166,5 +170,126 @@ describe("computeWhenToGo produces a real clock window", () => {
     expect(w.category).toBe("No hurry");
     expect(w.reason).not.toMatch(/from (\d+) to \1/);
     expect(w.reason).toMatch(/wind stays light all morning/);
+  });
+});
+
+describe("wind-against-tide is configurable per location", () => {
+  const ctx = { ...baseContext, tideStage: "flood" };
+  const easterly = morning({ windMph: 7, gustMph: 9, windDirDeg: 90, precipProbPct: 0, precipIn: 0, cloudPct: 40, apparentTempF: 74 });
+
+  it("applies Masonboro's flood/ebb penalty by default", () => {
+    const withDefault = computeDayScore(easterly, ctx);
+    const off = computeDayScore(easterly, { ...ctx, windAgainstTide: null });
+    expect(off.breakdown.windDirection.score - withDefault.breakdown.windDirection.score).toBe(12);
+  });
+
+  it("explicitly passing the default ranges matches leaving them out", () => {
+    const a = computeDayScore(easterly, ctx);
+    const b = computeDayScore(easterly, { ...ctx, windAgainstTide: DEFAULT_WIND_AGAINST_TIDE });
+    expect(b.score).toBe(a.score);
+  });
+});
+
+describe("spot wind matching covers neighbouring compass points", () => {
+  it("treats NNE and ENE as NE, but not N or E", () => {
+    expect(windFromAny(22.5, ["NE"])).toBe(true); // NNE
+    expect(windFromAny(67.5, ["NE"])).toBe(true); // ENE
+    expect(windFromAny(0, ["NE"])).toBe(false);
+    expect(windFromAny(90, ["NE"])).toBe(false);
+    expect(windFromAny(350, ["N"])).toBe(true); // wraps through north
+    expect(windFromAny(null, ["N"])).toBe(false);
+  });
+
+  it("a NNE wind now pushes the north-side Masonboro troll down", () => {
+    const masonboro = LOCATIONS.find((l) => l.id === "masonboro-inlet");
+    const args = { avgWaveFt: 1.5, avgPeriodSec: 8, tideEventsInWindow: [] };
+    const nne = recommendSpots(masonboro.spots, { ...args, avgDirDeg: 25 }).map((s) => s.id);
+    const west = recommendSpots(masonboro.spots, { ...args, avgDirDeg: 270 }).map((s) => s.id);
+    expect(west).toContain("nearshore-north");
+    expect(nne).not.toContain("nearshore-north");
+    expect(nne).toContain("nearshore-south"); // the lee side on a NE-ish wind
+  });
+});
+
+describe("mixed beach/boat locations recommend both kinds", () => {
+  const cape = LOCATIONS.find((l) => l.id === "cape-lookout");
+
+  it("returns up to two beach and two boat spots on a calm day", () => {
+    const spots = recommendSpots(cape.spots, { avgWaveFt: 1.2, avgPeriodSec: 9, avgDirDeg: 300, tideEventsInWindow: [{ hour: 7 }] });
+    expect(spots.filter((s) => s.access === "beach").length).toBe(2);
+    expect(spots.filter((s) => s.access === "boat").length).toBe(2);
+  });
+
+  it("drops the boat runs when seas are up, but still offers the sheltered Bight", () => {
+    const spots = recommendSpots(cape.spots, { avgWaveFt: 4.5, avgPeriodSec: 5, avgDirDeg: 45, tideEventsInWindow: [] });
+    expect(spots.filter((s) => s.access === "boat")).toHaveLength(0);
+    expect(spots.map((s) => s.id)).toContain("lookout-bight");
+  });
+
+  it("boat-only Masonboro still gets a plain top three", () => {
+    const masonboro = LOCATIONS.find((l) => l.id === "masonboro-inlet");
+    const spots = recommendSpots(masonboro.spots, { avgWaveFt: 1, avgPeriodSec: 9, avgDirDeg: 270, tideEventsInWindow: [] });
+    expect(spots).toHaveLength(3);
+    expect(spots.every((s) => s.access === "boat")).toBe(true);
+  });
+
+  it("uses the location's own rough-water advice for the inshore fallback", () => {
+    const picks = recommendSpecies(cape.species, { month: 10, sstF: 72, finalScore: 20, avgWindMph: 24, roughWaterAdvice: cape.roughWaterAdvice });
+    const fallback = picks.find((s) => s.inshoreFallback);
+    expect(fallback.reason).toBe(cape.roughWaterAdvice);
+  });
+});
+
+describe("location config sanity", () => {
+  it("every location has a unique URL-safe id and the fields the app needs", () => {
+    const ids = LOCATIONS.map((l) => l.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const l of LOCATIONS) {
+      expect(l.id).toMatch(/^[a-z0-9-]+$/);
+      expect(typeof l.lat).toBe("number");
+      expect(typeof l.lon).toBe("number");
+      expect(l.tideStationId).toBeTruthy();
+      expect(l.spots.length).toBeGreaterThan(0);
+      expect(l.species.length).toBeGreaterThan(0);
+      for (const s of l.spots) expect(["boat", "beach", undefined]).toContain(s.access);
+      for (const sp of l.species) {
+        for (const m of sp.activeMonths) expect(m >= 1 && m <= 12).toBe(true);
+      }
+    }
+  });
+});
+
+describe("when-to-go doesn't sugar-coat a blown-out morning", () => {
+  const sunrise = new Date(2000, 0, 1, 7, 0, 0, 0);
+
+  it("says 'Sit this one out' when a safety cap fired and the wind never drops", () => {
+    const win = morning({ windMph: 21, gustMph: 31, windDirDeg: 45, precipProbPct: 0, visibilityMi: 10 });
+    const w = computeWhenToGo(win, sunrise, ["small-craft-wind"]);
+    expect(w.category).toBe("Sit this one out");
+    expect(w.windowStart).toBeNull();
+    expect(w.label).not.toMatch(/gets better/);
+  });
+
+  it("still says 'Wait it out' when a capped morning genuinely cleans up later", () => {
+    const byHour = { 5: 24, 6: 23, 7: 22, 8: 18, 9: 12, 10: 10, 11: 9 };
+    const win = [5, 6, 7, 8, 9, 10, 11].map((h) => hour(h, { windMph: byHour[h], gustMph: byHour[h] + 4, windDirDeg: 270, precipProbPct: 0, visibilityMi: 10 }));
+    expect(computeWhenToGo(win, sunrise, ["small-craft-wind"]).category).toBe("Wait it out");
+  });
+
+  it("only promises 'it only gets better' when something actually eases", () => {
+    const steady = morning({ windMph: 12, gustMph: 15, windDirDeg: 270, precipProbPct: 0, visibilityMi: 10 });
+    expect(computeWhenToGo(steady, sunrise).label).not.toMatch(/gets better/);
+    const byHour = { 5: 12, 6: 12, 7: 11, 8: 10, 9: 8, 10: 7, 11: 6 };
+    const easing = [5, 6, 7, 8, 9, 10, 11].map((h) => hour(h, { windMph: byHour[h], gustMph: byHour[h] + 3, windDirDeg: 270, precipProbPct: 0, visibilityMi: 10 }));
+    expect(computeWhenToGo(easing, sunrise).label).toMatch(/gets better/);
+  });
+});
+
+describe("species reasons on rough days", () => {
+  it("doesn't call 20+ mph wind 'prime' conditions", () => {
+    const sp = [{ id: "false-albacore", name: "False albacore", activeMonths: [10], sstMinF: 62, sstMaxF: 80, notes: "" }];
+    const [pick] = recommendSpecies(sp, { month: 10, sstF: 72, finalScore: 25, avgWindMph: 22 });
+    expect(pick.reason).not.toMatch(/prime/);
+    expect(pick.reason).toMatch(/tough day/);
   });
 });

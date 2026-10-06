@@ -4,5 +4,19 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "masonboro-fishing-dashboard.vercel.app" }],
+      "destination": "https://nc-fishing-forecast.vercel.app/masonboro-inlet",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "masonboro-fishing-dashboard.vercel.app" }],
+      "destination": "https://nc-fishing-forecast.vercel.app/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [{ "source": "/(.*)", "destination": "/" }]
 }

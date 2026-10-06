@@ -1,9 +1,8 @@
-export default function Footer({ location, fetchedAt, weatherConnected, marineConnected }) {
+export default function Footer({ location, fetchedAt, weatherConnected, marineConnected, tidesConnected }) {
   const sources = [
     `Open-Meteo forecast${weatherConnected ? "" : " (not connected)"}`,
     `Open-Meteo marine${marineConnected ? "" : " (not connected)"}`,
-    `NOAA CO-OPS tides, station ${location.tideStationId}`,
-    `NDBC buoy ${location.buoyId}`,
+    `NOAA CO-OPS tides, station ${location.tideStationId}${tidesConnected ? "" : " (not connected)"}`,
   ];
   return (
     <footer className="text-center text-xs pt-2 pb-8" style={{ color: "var(--label-dim)" }}>
