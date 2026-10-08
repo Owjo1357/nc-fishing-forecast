@@ -2,7 +2,7 @@
 
 Morning fishing forecasts for the North Carolina coast. Every morning gets a score, a time to go, what's biting, and where to fish.
 
-**[nc-fishing-forecast.vercel.app](https://nc-fishing-forecast.vercel.app)**
+**[ncfishingforecast.com](https://ncfishingforecast.com)**
 
 Open it on your phone before sunrise and you get that morning's actual conditions, not a generic weather report.
 
@@ -21,8 +21,8 @@ Open it on your phone before sunrise and you get that morning's actual condition
 
 | Place | Fishing | Link |
 |---|---|---|
-| Masonboro Inlet, Wrightsville Beach | Nearshore trolling and the inlet reefs | [/masonboro-inlet](https://nc-fishing-forecast.vercel.app/masonboro-inlet) |
-| Cape Lookout, Core Banks | Surf fishing from the beach, plus boat runs to the shoals and reefs | [/cape-lookout](https://nc-fishing-forecast.vercel.app/cape-lookout) |
+| Masonboro Inlet, Wrightsville Beach | Nearshore trolling and the inlet reefs | [/masonboro-inlet](https://ncfishingforecast.com/masonboro-inlet) |
+| Cape Lookout, Core Banks | Surf fishing from the beach, plus boat runs to the shoals and reefs | [/cape-lookout](https://ncfishingforecast.com/cape-lookout) |
 
 Each place has its own link, so you can bookmark the one you fish or add it to your home screen.
 

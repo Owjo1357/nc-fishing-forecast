@@ -3,8 +3,9 @@ import { nowInNY } from "../lib/appLogic.js";
 import { IconClock, IconFish, IconPin, IconWave } from "./Icons.jsx";
 import SignalFlag from "./SignalFlag.jsx";
 
-// One-time "what's new in 2.0" popup for the rename and move from
-// masonboro-fishing-dashboard.vercel.app.
+// One-time "what's new in 2.0" popup for the rename and move to
+// ncfishingforecast.com (masonboro-fishing-dashboard.vercel.app and
+// nc-fishing-forecast.vercel.app both redirect there).
 //
 // Shown once per device: closing it is remembered in localStorage.
 // There's no way to show it only to people who came from the old link
@@ -169,8 +170,8 @@ export default function WhatsNew() {
 
           <div className="mt-5 rounded-xl px-4 py-3 text-sm leading-snug" style={{ background: "var(--bg-top)", color: "var(--ink-soft)" }}>
             The new address is{" "}
-            <a href="https://nc-fishing-forecast.vercel.app" className="font-semibold" style={{ color: "var(--accent)" }}>
-              nc-fishing-forecast.vercel.app
+            <a href="https://ncfishingforecast.com" className="font-semibold" style={{ color: "var(--accent)" }}>
+              ncfishingforecast.com
             </a>
             . Old links still bring you here, but if you saved the old site to your home screen, add this one
             instead.
