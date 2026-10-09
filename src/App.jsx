@@ -3,6 +3,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { LOCATIONS, findLocation } from "./config/locations.js";
 import { buildDays } from "./lib/appLogic.js";
 import { loadForecast } from "./lib/dataFetch.js";
+import { locationMeta } from "./lib/seo.js";
 
 import Header from "./components/Header.jsx";
 import DayTabs from "./components/DayTabs.jsx";
@@ -82,7 +83,7 @@ export default function App() {
   );
 
   useEffect(() => {
-    document.title = `${location.name} · NC Fishing Forecast`;
+    document.title = locationMeta(location).title;
     const force = forceFirstLoad.current;
     forceFirstLoad.current = false;
     fetchData(force);
